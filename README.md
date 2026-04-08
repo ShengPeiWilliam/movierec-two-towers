@@ -1,6 +1,6 @@
 # movierec-two-towers
 
-A retrieval-stage movie recommendation system built with a Two-Tower model, trained on the MovieLens 100K dataset.
+Movie Recommendation System (Two-Tower Model) Built a retrieval-stage recommender to study how large-scale systems narrow millions of candidates efficiently. Designed implicit feedback labels to reduce rating noise, and systematically tuned negative sampling and genre embeddings, improving retrieval recall by 27%.
 
 ## Motivation
 
