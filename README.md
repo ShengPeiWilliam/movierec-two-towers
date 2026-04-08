@@ -2,85 +2,74 @@
 
 A retrieval-stage movie recommendation system built with a Two-Tower model, trained on the MovieLens 100K dataset.
 
----
-
 ## Motivation
 
-> Inspired by [Scaling the Instagram Explore Recommendations System](https://engineering.fb.com/2023/08/09/ml-applications/scaling-instagram-explore-recommendations-system/).
+After reading Meta's engineering post on [scaling Instagram Explore](https://engineering.fb.com/2023/08/09/ml-applications/scaling-instagram-explore-recommendations-system/), I wanted to understand how large-scale recommendation systems actually work under the hood, not just at a conceptual level, but by building and measuring one myself.
 
-Large-scale recommendation systems (e.g., Instagram Explore) typically operate in two stages:
+Instagram Explore handles recommendations at a scale where it's impossible to compare every user against every piece of content. Their solution is a two-stage pipeline:
 
-1. **Retrieval (First-stage):** Quickly retrieve hundreds of relevant candidates from a pool of millions using a lightweight model.
-2. **Ranking (Second-stage):** Precisely re-rank the retrieved candidates using a heavier model.
+1. **Retrieval (First-stage):** A lightweight model quickly narrows millions of candidates down to a few hundred relevant ones.
+2. **Ranking (Second-stage):** A heavier model re-ranks those candidates with higher precision.
 
-This project focuses on the **first stage — retrieval** — and validates the Two-Tower architecture on a single vertical task: movie recommendation.
-
-Unlike social platforms where recommendations must balance engagement across heterogeneous content, a movie recommender operates in a well-defined domain, making it a clean environment to study retrieval quality and embedding behavior.
-
----
+This project implements the **first stage** using a Two-Tower architecture on MovieLens 100K, a contained environment to validate whether the approach actually learns meaningful user preferences.
 
 ## Design Decisions
 
-> Guided by the principles in [Data Scientists: Technical Skill Meets Business Impact](https://careersatdoordash.com/blog/data-scientists-technical-skill-business-impact/) — Impact, Expertise, Platformization, Accountability, Reliability, and Efficiency.
+### Why implicit feedback instead of ratings?
 
-### Label Design: Reducing Rating Noise
+A natural first instinct is to train directly on star ratings. But rating values introduce subjective noise, a 3-star from one user might mean the same as a 5-star from another. More importantly, for a retrieval system, what matters most is whether a user is interested in a piece of content at all, not how precisely they'd score it.
 
-Raw rating values introduce subjective noise — different users apply different standards (a 3-star from one user may equal a 5-star from another). Instead of regressing on rating scores, we reduce the signal to **implicit feedback**:
+Reading DoorDash's approach to [balancing technical rigor with business impact](https://careersatdoordash.com/blog/data-scientists-technical-skill-business-impact/) reinforced this thinking: good model decisions should reflect real behavioral signals, not noisy proxies.
 
-- **Watched → label = +1**
-- **Not watched (negative sample) → label = -1**
-
-This focuses the model on behavioral signals rather than subjective preferences, and pairs naturally with **CosineEmbeddingLoss**, which learns to push user and item embeddings closer for positive pairs and further apart for negative pairs.
-
-### Negative Sampling
-
-For each positive (user, item) pair, we randomly sample **4 unseen items** as negatives (ratio 1:4). This gives the model sufficient contrast to learn meaningful separation in the embedding space without overwhelming the positive signal.
-
----
+So instead of regressing on ratings, we simplify to **implicit feedback**: watched = +1, not watched = -1. For each positive pair, 8 unseen items are sampled as negatives (ratio 1:8) to give the model enough contrast to learn meaningful separation.
 
 ## Architecture
 
-```
-User ID ──► User Tower (Embedding → Linear → ReLU → Linear → L2 Norm) ──► user_emb ─┐
-                                                                                        ├──► CosineEmbeddingLoss
-Item ID ──► Item Tower (Embedding → Linear → ReLU → Linear → L2 Norm) ──► item_emb ─┘
-```
+At a high level: two separate neural networks learn representations for users and movies independently. After training, recommendations are made by finding movies whose learned vectors are closest to a given user's vector.
 
-After training:
-- All item embeddings are pre-computed and stored in **ChromaDB** (cosine space).
-- At inference, a user embedding is computed on-the-fly and used to query the nearest item vectors.
+**User Tower** takes a `user_id` and learns a vector that captures that user's taste, purely from their watch history, no demographic data needed.
 
----
+**Item Tower** takes a `movie_id` plus its genre tags, and learns a vector that captures the movie's characteristics. Genre embeddings are mean-pooled and concatenated with the item embedding before passing through the network.
 
-## Pipeline
+Both towers are trained jointly. Watched pairs are pushed together, unmatched pairs are pushed apart. After training, movie vectors are pre-indexed in ChromaDB and served via a FastAPI endpoint.
 
-Each module has a single responsibility, making the system easy to swap out components:
-
-- **Data** — Raw ratings are preprocessed into implicit feedback pairs. Movie metadata (title, genre) is stored separately and only used for display, not training.
-- **Model** — The two towers are trained jointly. After training, the item tower is frozen and its outputs are indexed into ChromaDB for fast retrieval.
-- **Retrieval** — At inference, only the user tower runs. The resulting vector queries ChromaDB to find the nearest item embeddings.
-- **API + UI** — A FastAPI endpoint wraps the retriever. The frontend demonstrates personalization across three users with distinct taste profiles.
-
----
+The demo uses three users with clearly different tastes, sci-fi, animation, and crime, to make personalization visible at a glance.
 
 ## Demo
 
 ![Demo Screenshot](assets/demo.png)
 
----
+## Experiments
 
-## Generalizability
+Evaluated using Recall@K on a held-out 20% test split per user. Recall@K measures what fraction of a user's held-out movies appear in the top-K recommendations.
 
-The architecture is not specific to movies. Any domain with user-item interaction logs (music, books, e-commerce) can adopt the same pipeline by replacing the dataset. The embedding dimension, negative sampling ratio, and loss function are all configurable via `config.py`.
+Baseline: 100K dataset, no genre features, 20 epochs.
 
----
+| Dataset | dim | neg | epoch | Genre | Recall@10 | Recall@20 | Recall@50 |
+|---------|-----|-----|-------|-------|-----------|-----------|-----------|
+| 100K | 128 | 4 | 20 | ✗ | 0.043 | 0.096 | 0.263 |
+| 100K | 128 | 8 | 20 | ✗ | 0.070 | 0.151 | 0.336 |
+| 100K | 128 | 8 | 20 | ✓ | 0.061 | 0.135 | 0.325 |
+| 1M   | 128 | 8 | 20 | ✓ | 0.031 | 0.058 | 0.159 |
+| **100K** | **128** | **8** | **50** | **✓** | **0.078** | **0.156** | **0.353** |
+
+**Recall@50 = 0.353** means the model correctly includes about 35% of what a user would actually watch in 50 candidates, a reasonable net for a retrieval stage that feeds into a downstream ranker.
+
+Key findings:
+- A 1:8 negative ratio provided sufficient contrast for the model to learn meaningful separation, doubling from 1:4 gave the largest single improvement across all K values.
+- Genre embedding improved results, but required sufficient training epochs (20 → 50) to learn genre semantics alongside behavior signals.
+- 1M scored lower due to a larger item pool (3,706 vs 1,682), making top-K retrieval inherently harder with the same architecture.
+
+## Reflections & Next Steps
+
+Building this made clear where the real complexity lies in production recommendation systems, it's not the model architecture itself, but the signal quality, scale, and evaluation discipline around it.
+
+If I were to continue:
+- **Enrich the pipeline** — add user-side sequential features and a second-stage ranking model to improve both input quality and final precision.
+- **Validate at scale** — offline Recall@K has limits. Testing on a larger dataset with A/B evaluation would be the only way to confirm real-world impact.
 
 ## References
 
-- [Scaling the Instagram Explore Recommendations System — Meta Engineering (2023)](https://engineering.fb.com/2023/08/09/ml-applications/scaling-instagram-explore-recommendations-system/)
-  — Architecture motivation: two-stage retrieval + ranking, and the role of Two-Tower models in first-stage candidate retrieval.
-
-- [Data Scientists: Technical Skill Meets Business Impact — DoorDash Careers Blog](https://careersatdoordash.com/blog/data-scientists-technical-skill-business-impact/)
-  — Design principles: Impact, Expertise, Platformization, Accountability, Reliability, Efficiency. These guided decisions such as using implicit feedback over raw ratings, and keeping the architecture domain-agnostic.
-
-- [MovieLens 100K Dataset — GroupLens](https://grouplens.org/datasets/movielens/100k/)
+- [Scaling the Instagram Explore Recommendations System, Meta Engineering (2023)](https://engineering.fb.com/2023/08/09/ml-applications/scaling-instagram-explore-recommendations-system/), motivation for the two-stage retrieval + ranking architecture.
+- [Data Scientists: Technical Skill Meets Business Impact, DoorDash Careers Blog](https://careersatdoordash.com/blog/data-scientists-technical-skill-business-impact/), grounded the decision to prioritize behavioral signals over raw ratings.
+- [MovieLens 100K Dataset, GroupLens](https://grouplens.org/datasets/movielens/100k/)
