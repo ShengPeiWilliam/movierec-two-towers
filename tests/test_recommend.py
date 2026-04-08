@@ -1,5 +1,3 @@
-"""Tests for /recommend API endpoint."""
-
 import json
 import requests
 

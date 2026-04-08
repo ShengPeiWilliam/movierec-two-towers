@@ -1,13 +1,27 @@
 import os
+import sys
 import urllib.request
 import zipfile
 import csv
 
-DATA_DIR = "data"
-ZIP_URL = "http://files.grouplens.org/datasets/movielens/ml-100k.zip"
-ZIP_PATH = os.path.join(DATA_DIR, "ml-100k.zip")
+DATA_DIR = "scripts/data"
 
-GENRE_NAMES = [
+DATASETS = {
+    "100k": {
+        "url": "http://files.grouplens.org/datasets/movielens/ml-100k.zip",
+        "zip": "ml-100k.zip",
+        "folder": "ml-100k",
+        "format": "100k",
+    },
+    "1m": {
+        "url": "http://files.grouplens.org/datasets/movielens/ml-1m.zip",
+        "zip": "ml-1m.zip",
+        "folder": "ml-1m",
+        "format": "1m",
+    },
+}
+
+GENRE_NAMES_100K = [
     "unknown", "Action", "Adventure", "Animation", "Children",
     "Comedy", "Crime", "Documentary", "Drama", "Fantasy",
     "Film-Noir", "Horror", "Musical", "Mystery", "Romance",
@@ -15,39 +29,41 @@ GENRE_NAMES = [
 ]
 
 
-def download_and_extract():
+def download_and_extract(url, zip_name, folder):
     os.makedirs(DATA_DIR, exist_ok=True)
+    zip_path = os.path.join(DATA_DIR, zip_name)
+    folder_path = os.path.join(DATA_DIR, folder)
 
-    print("Downloading MovieLens 100K...")
-    urllib.request.urlretrieve(ZIP_URL, ZIP_PATH)
+    if os.path.exists(folder_path):
+        print(f"Already exists: {folder_path}, skipping download.")
+        return
 
+    print(f"Downloading {url}...")
+    urllib.request.urlretrieve(url, zip_path)
     print("Extracting...")
-    with zipfile.ZipFile(ZIP_PATH, "r") as zf:
+    with zipfile.ZipFile(zip_path, "r") as zf:
         zf.extractall(DATA_DIR)
+    os.remove(zip_path)
 
-    os.remove(ZIP_PATH)
 
+# ── 100K ──────────────────────────────────────────────────────────────
 
-def build_ratings_csv():
-    """u.data → data/ratings.csv (user_id, item_id, rating, timestamp)"""
-    src = os.path.join(DATA_DIR, "ml-100k", "u.data")
+def build_100k():
+    folder = os.path.join(DATA_DIR, "ml-100k")
+
+    # ratings.csv
+    src = os.path.join(folder, "u.data")
     dst = os.path.join(DATA_DIR, "ratings.csv")
-
     with open(src, "r") as fin, open(dst, "w", newline="") as fout:
         writer = csv.writer(fout)
         writer.writerow(["user_id", "item_id", "rating", "timestamp"])
         for line in fin:
-            parts = line.strip().split("\t")
-            writer.writerow(parts)
-
+            writer.writerow(line.strip().split("\t"))
     print(f"Saved {dst}")
 
-
-def build_movies_csv():
-    """u.item → data/movies.csv (item_id, title, genre)"""
-    src = os.path.join(DATA_DIR, "ml-100k", "u.item")
+    # movies.csv
+    src = os.path.join(folder, "u.item")
     dst = os.path.join(DATA_DIR, "movies.csv")
-
     with open(src, "r", encoding="latin-1") as fin, open(dst, "w", newline="", encoding="utf-8") as fout:
         writer = csv.writer(fout)
         writer.writerow(["item_id", "title", "genre"])
@@ -56,15 +72,57 @@ def build_movies_csv():
             item_id = fields[0]
             title = fields[1]
             genre_flags = fields[5:]
-            genres = [GENRE_NAMES[i] for i, flag in enumerate(genre_flags) if flag == "1"]
+            genres = [GENRE_NAMES_100K[i] for i, flag in enumerate(genre_flags) if flag == "1"]
             genre_str = "|".join(genres) if genres else "unknown"
             writer.writerow([item_id, title, genre_str])
-
     print(f"Saved {dst}")
 
 
+# ── 1M ────────────────────────────────────────────────────────────────
+
+def build_1m():
+    folder = os.path.join(DATA_DIR, "ml-1m")
+
+    # ratings.csv — format: UserID::MovieID::Rating::Timestamp
+    src = os.path.join(folder, "ratings.dat")
+    dst = os.path.join(DATA_DIR, "ratings.csv")
+    with open(src, "r", encoding="latin-1") as fin, open(dst, "w", newline="") as fout:
+        writer = csv.writer(fout)
+        writer.writerow(["user_id", "item_id", "rating", "timestamp"])
+        for line in fin:
+            parts = line.strip().split("::")
+            writer.writerow(parts)
+    print(f"Saved {dst}")
+
+    # movies.csv — format: MovieID::Title::Genres (pipe-separated, already string)
+    src = os.path.join(folder, "movies.dat")
+    dst = os.path.join(DATA_DIR, "movies.csv")
+    with open(src, "r", encoding="latin-1") as fin, open(dst, "w", newline="", encoding="utf-8") as fout:
+        writer = csv.writer(fout)
+        writer.writerow(["item_id", "title", "genre"])
+        for line in fin:
+            parts = line.strip().split("::")
+            item_id = parts[0]
+            title = parts[1]
+            genre_str = parts[2]  # already "Action|Comedy|..." format
+            writer.writerow([item_id, title, genre_str])
+    print(f"Saved {dst}")
+
+
+# ── Main ──────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
-    download_and_extract()
-    build_ratings_csv()
-    build_movies_csv()
-    print("Done!")
+    version = sys.argv[1].lower() if len(sys.argv) > 1 else "1m"
+    if version not in DATASETS:
+        print(f"Unknown version: {version}. Choose from: {list(DATASETS.keys())}")
+        sys.exit(1)
+
+    cfg = DATASETS[version]
+    download_and_extract(cfg["url"], cfg["zip"], cfg["folder"])
+
+    if cfg["format"] == "100k":
+        build_100k()
+    else:
+        build_1m()
+
+    print(f"Done! MovieLens {version.upper()} ready in {DATA_DIR}/")
