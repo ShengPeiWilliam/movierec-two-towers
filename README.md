@@ -65,8 +65,8 @@ Key findings:
 Building this made clear where the real complexity lies in production recommendation systems, it's not the model architecture itself, but the signal quality, scale, and evaluation discipline around it.
 
 If I were to continue:
-- **Enrich the pipeline** — add user-side sequential features and a second-stage ranking model to improve both input quality and final precision.
-- **Validate at scale** — offline Recall@K has limits. Testing on a larger dataset with A/B evaluation would be the only way to confirm real-world impact.
+- **Enrich the pipeline**: add user-side sequential features and a second-stage ranking model to improve both input quality and final precision.
+- **Validate at scale**: offline Recall@K has limits. Testing on a larger dataset with A/B evaluation would be the only way to confirm real-world impact.
 
 ## References
 
