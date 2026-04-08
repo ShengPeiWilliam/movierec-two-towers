@@ -1,0 +1,32 @@
+[
+  {
+    "user_id": 196,
+    "name": "William",
+    "avatar": "🎭",
+    "history": [
+      {"item_id": 50,  "title": "Star Wars (1977)",           "rating": 5, "genre": "Action|Adventure|Sci-Fi"},
+      {"item_id": 172, "title": "Empire Strikes Back (1980)", "rating": 5, "genre": "Action|Adventure|Drama|Sci-Fi|War"},
+      {"item_id": 181, "title": "Return of the Jedi (1983)",  "rating": 4, "genre": "Action|Adventure|Romance|Sci-Fi|War"}
+    ]
+  },
+  {
+    "user_id": 13,
+    "name": "Bob",
+    "avatar": "🎬",
+    "history": [
+      {"item_id": 1,  "title": "Toy Story (1995)",       "rating": 5, "genre": "Animation|Children|Comedy"},
+      {"item_id": 71, "title": "Lion King, The (1994)",  "rating": 4, "genre": "Animation|Children|Drama|Musical"},
+      {"item_id": 95, "title": "Aladdin (1992)",         "rating": 4, "genre": "Animation|Children|Comedy|Musical|Romance"}
+    ]
+  },
+  {
+    "user_id": 450,
+    "name": "Carol",
+    "avatar": "🎞️",
+    "history": [
+      {"item_id": 127, "title": "Godfather, The (1972)",            "rating": 5, "genre": "Action|Crime|Drama"},
+      {"item_id": 100, "title": "Fargo (1996)",                     "rating": 5, "genre": "Crime|Drama|Thriller"},
+      {"item_id": 117, "title": "Silence of the Lambs, The (1991)", "rating": 4, "genre": "Drama|Thriller"}
+    ]
+  }
+]

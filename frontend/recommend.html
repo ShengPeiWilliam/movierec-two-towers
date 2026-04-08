@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Movie Recommender</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8rem;
+      margin-bottom: 32px;
+      color: #fff;
+      letter-spacing: 0.5px;
+    }
+
+    /* User cards */
+    .user-cards {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 36px;
+      flex-wrap: wrap;
+    }
+
+    .user-card {
+      background: #1e1e2e;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      padding: 16px 28px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .user-card:hover { border-color: #7c6af7; }
+    .user-card.active {
+      border-color: #7c6af7;
+      background: #2a2a3e;
+    }
+
+    /* Main layout */
+    .main {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* History section */
+    .section-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #888;
+      margin-bottom: 12px;
+    }
+
+    .history-bar {
+      background: #1e1e2e;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 28px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .history-item {
+      background: #2a2a3e;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stars { color: #f5c518; font-size: 0.8rem; }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .tag {
+      background: #3a3a5c;
+      color: #a89cf7;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 0.72rem;
+      letter-spacing: 0.3px;
+    }
+
+    /* Recommendations */
+    .rec-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .rec-card {
+      background: #1e1e2e;
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: transform 0.15s;
+    }
+
+    .rec-card:hover { transform: translateY(-2px); }
+
+    .rec-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .rec-genre {
+      font-size: 0.78rem;
+      color: #888;
+    }
+
+    .rec-icon { font-size: 1.1rem; }
+
+    /* Loading / empty */
+    .status {
+      text-align: center;
+      color: #666;
+      padding: 40px 0;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🎬 Movie Recommender</h1>
+
+<div class="user-cards" id="userCards"></div>
+
+<div class="main">
+  <div class="section-title" id="historyLabel" style="display:none">Watch History</div>
+  <div class="history-bar" id="historyBar" style="display:none"></div>
+
+  <div class="section-title" id="recLabel" style="display:none">Recommended for You</div>
+  <div id="recArea"><p class="status">Select a user to get recommendations</p></div>
+</div>
+
+<script>
+  const API = "http://localhost:8000/recommend";
+  let users = [];
+  let activeUserId = null;
+
+  function stars(n) {
+    return "★".repeat(n) + "☆".repeat(5 - n);
+  }
+
+  function renderUserCards() {
+    const container = document.getElementById("userCards");
+    container.innerHTML = users.map(u => `
+      <div class="user-card" data-id="${u.user_id}" onclick="selectUser(${u.user_id})">
+        ${u.name}
+      </div>
+    `).join("");
+  }
+
+  function renderHistory(user) {
+    const bar = document.getElementById("historyBar");
+    const label = document.getElementById("historyLabel");
+    bar.style.display = "flex";
+    label.style.display = "block";
+    bar.innerHTML = user.history.map(h => `
+      <div class="history-item">
+        🎥 <span>${h.title}</span>
+        <span class="stars">${stars(h.rating)}</span>
+        <div class="tags">${h.genre.split("|").map(g => `<span class="tag">${g}</span>`).join("")}</div>
+      </div>
+    `).join("");
+  }
+
+  async function fetchRecommendations(user_id) {
+    const area = document.getElementById("recArea");
+    area.innerHTML = '<p class="status">Loading...</p>';
+
+    try {
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id, k: 10 }),
+      });
+      const data = await res.json();
+      const recs = data.recommendations;
+
+      area.innerHTML = `<div class="rec-grid">${
+        recs.map(r => `
+          <div class="rec-card">
+            <span class="rec-icon">🎬</span>
+            <div class="rec-title">${r.title}</div>
+            <div class="rec-genre">${r.genre}</div>
+          </div>
+        `).join("")
+      }</div>`;
+    } catch (e) {
+      area.innerHTML = '<p class="status">Unable to connect to API. Please make sure the server is running.</p>';
+    }
+  }
+
+  function selectUser(user_id) {
+    activeUserId = user_id;
+
+    // Update active card
+    document.querySelectorAll(".user-card").forEach(el => {
+      el.classList.toggle("active", parseInt(el.dataset.id) === user_id);
+    });
+
+    const user = users.find(u => u.user_id === user_id);
+    renderHistory(user);
+
+    document.getElementById("recLabel").style.display = "block";
+    fetchRecommendations(user_id);
+  }
+
+  // Load users.json and init
+  fetch("../demo/users.json")
+    .then(r => r.json())
+    .then(data => {
+      users = data;
+      renderUserCards();
+    });
+</script>
+</body>
+</html>
