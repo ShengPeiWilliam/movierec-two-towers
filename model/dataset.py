@@ -1,3 +1,5 @@
+"""Dataset with negative sampling for two-tower model."""
+
 import csv
 import random
 import torch
@@ -9,7 +11,7 @@ from config import DATA_PATH, NUM_NEGATIVES
 
 
 class MovieDataset(Dataset):
-    def __init__(self):
+    def __init__(self, test_ratio=0.2):
         # Read ratings.csv
         user_ids = []
         item_ids = []
@@ -29,29 +31,40 @@ class MovieDataset(Dataset):
         self.num_users = len(unique_users)
         self.num_items = len(unique_items)
 
-        # Build user → set of watched items (0-indexed)
-        self.user_watched = {}
+        # Build user → list of watched items (0-indexed)
+        user_items = {}
         for uid, iid in zip(user_ids, item_ids):
             uidx = self.user2idx[uid]
             iidx = self.item2idx[iid]
-            if uidx not in self.user_watched:
-                self.user_watched[uidx] = set()
-            self.user_watched[uidx].add(iidx)
+            if uidx not in user_items:
+                user_items[uidx] = []
+            user_items[uidx].append(iidx)
 
-        # Build positive + negative pairs
+        # Train / test split per user
+        self.user_train = {}
+        self.user_test = {}
+        for uidx, items in user_items.items():
+            random.shuffle(items)
+            split = max(1, int(len(items) * (1 - test_ratio)))
+            self.user_train[uidx] = set(items[:split])
+            self.user_test[uidx] = set(items[split:])
+
+        # Build user_watched = train only (for negative sampling)
+        self.user_watched = self.user_train
+
+        # Build positive + negative pairs from train set only
         self.samples = []
         all_items = set(range(self.num_items))
 
-        for uid, iid in zip(user_ids, item_ids):
-            uidx = self.user2idx[uid]
-            iidx = self.item2idx[iid]
-            # Positive: user watched this item
-            self.samples.append((uidx, iidx, 1))
-            # Negative: random items user has NOT watched
-            unseen = list(all_items - self.user_watched[uidx])
-            negatives = random.sample(unseen, min(NUM_NEGATIVES, len(unseen)))
-            for neg_iidx in negatives:
-                self.samples.append((uidx, neg_iidx, -1))
+        for uidx, train_items in self.user_train.items():
+            for iidx in train_items:
+                # Positive
+                self.samples.append((uidx, iidx, 1))
+                # Negative
+                unseen = list(all_items - train_items)
+                negatives = random.sample(unseen, min(NUM_NEGATIVES, len(unseen)))
+                for neg_iidx in negatives:
+                    self.samples.append((uidx, neg_iidx, -1))
 
     def __len__(self):
         return len(self.samples)
