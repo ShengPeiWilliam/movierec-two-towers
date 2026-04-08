@@ -171,7 +171,7 @@
     const container = document.getElementById("userCards");
     container.innerHTML = users.map(u => `
       <div class="user-card" data-id="${u.user_id}" onclick="selectUser(${u.user_id})">
-        ${u.avatar} ${u.name}
+        ${u.name}
       </div>
     `).join("");
   }
@@ -192,7 +192,7 @@
 
   async function fetchRecommendations(user_id) {
     const area = document.getElementById("recArea");
-    area.innerHTML = '<p class="status">載入中...</p>';
+    area.innerHTML = '<p class="status">Loading...</p>';
 
     try {
       const res = await fetch(API, {
@@ -213,7 +213,7 @@
         `).join("")
       }</div>`;
     } catch (e) {
-      area.innerHTML = '<p class="status">無法連線到 API，請確認 server 已啟動</p>';
+      area.innerHTML = '<p class="status">Unable to connect to API. Please make sure the server is running.</p>';
     }
   }
 
