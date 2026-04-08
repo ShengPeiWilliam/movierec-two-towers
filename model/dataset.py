@@ -1,5 +1,3 @@
-"""Dataset with negative sampling for two-tower model."""
-
 import csv
 import random
 import torch
@@ -7,7 +5,30 @@ from torch.utils.data import Dataset
 
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import DATA_PATH, NUM_NEGATIVES
+from config import (
+    DATA_PATH, MOVIES_PATH, NUM_NEGATIVES,
+    GENRE_LIST, GENRE_PADDING_IDX, MAX_GENRE_LEN,
+)
+
+GENRE2IDX = {g: i for i, g in enumerate(GENRE_LIST)}
+
+
+def load_item_genres(movies_path, item2idx):
+    """Load movies.csv → {item_idx: genre_tensor (MAX_GENRE_LEN,)}"""
+    item2genre = {}
+    with open(movies_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            item_id = int(row["item_id"])
+            if item_id not in item2idx:
+                continue
+            item_idx = item2idx[item_id]
+            genres = [g for g in row["genre"].split("|") if g in GENRE2IDX]
+            indices = [GENRE2IDX[g] for g in genres[:MAX_GENRE_LEN]]
+            # Pad to MAX_GENRE_LEN with GENRE_PADDING_IDX
+            indices += [GENRE_PADDING_IDX] * (MAX_GENRE_LEN - len(indices))
+            item2genre[item_idx] = torch.tensor(indices, dtype=torch.long)
+    return item2genre
 
 
 class MovieDataset(Dataset):
@@ -31,6 +52,12 @@ class MovieDataset(Dataset):
         self.num_users = len(unique_users)
         self.num_items = len(unique_items)
 
+        # Load genre per item
+        self.item2genre = load_item_genres(MOVIES_PATH, self.item2idx)
+
+        # Fallback genre tensor for missing items
+        self._padding_genre = torch.full((MAX_GENRE_LEN,), GENRE_PADDING_IDX, dtype=torch.long)
+
         # Build user → list of watched items (0-indexed)
         user_items = {}
         for uid, iid in zip(user_ids, item_ids):
@@ -49,7 +76,6 @@ class MovieDataset(Dataset):
             self.user_train[uidx] = set(items[:split])
             self.user_test[uidx] = set(items[split:])
 
-        # Build user_watched = train only (for negative sampling)
         self.user_watched = self.user_train
 
         # Build positive + negative pairs from train set only
@@ -58,13 +84,14 @@ class MovieDataset(Dataset):
 
         for uidx, train_items in self.user_train.items():
             for iidx in train_items:
-                # Positive
                 self.samples.append((uidx, iidx, 1))
-                # Negative
                 unseen = list(all_items - train_items)
                 negatives = random.sample(unseen, min(NUM_NEGATIVES, len(unseen)))
                 for neg_iidx in negatives:
                     self.samples.append((uidx, neg_iidx, -1))
+
+    def get_genre(self, item_idx):
+        return self.item2genre.get(item_idx, self._padding_genre)
 
     def __len__(self):
         return len(self.samples)
@@ -74,5 +101,6 @@ class MovieDataset(Dataset):
         return (
             torch.tensor(uidx, dtype=torch.long),
             torch.tensor(iidx, dtype=torch.long),
+            self.get_genre(iidx),
             torch.tensor(label, dtype=torch.float),
         )

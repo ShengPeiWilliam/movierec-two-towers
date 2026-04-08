@@ -54,7 +54,7 @@ def evaluate():
         results = collection.query(
             query_embeddings=[query],
             n_results=max_k,
-            include=["ids"],
+            include=["metadatas"],
         )
         recommended_ids = results["ids"][0]  # list of item_id strings
 

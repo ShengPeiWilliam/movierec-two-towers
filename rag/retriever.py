@@ -1,5 +1,3 @@
-"""Retrieve top-k movie recommendations for a given user."""
-
 import os
 import torch
 import chromadb
