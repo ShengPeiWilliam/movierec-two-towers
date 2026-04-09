@@ -61,5 +61,5 @@ If I were to continue:
 
 ## References
 
-- [Scaling the Instagram Explore Recommendations System, Meta Engineering (2023)](https://engineering.fb.com/2023/08/09/ml-applications/scaling-instagram-explore-recommendations-system/), motivation for the two-stage retrieval + ranking architecture.
-- [MovieLens 100K Dataset, GroupLens](https://grouplens.org/datasets/movielens/100k/)
+- [Scaling the Instagram Explore Recommendations System, Meta Engineering (2023)](https://engineering.fb.com/2023/08/09/ml-applications/scaling-instagram-explore-recommendations-system/) — motivation for the two-stage retrieval + ranking architecture.
+- [MovieLens 100K Dataset, GroupLens](https://grouplens.org/datasets/movielens/100k/) — training dataset, 100,000 ratings from 943 users across 1,682 movies.
