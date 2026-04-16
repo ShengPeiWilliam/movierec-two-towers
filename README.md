@@ -1,6 +1,6 @@
 # Two-Tower Retrieval for Recommendation
 
-Retrieval-stage movie recommendation system using a Two-Tower model, trained on MovieLens 100K with implicit feedback and genre embeddings. Improved retrieval recall by 27% through systematic negative sampling and epoch tuning.
+Retrieval-stage movie recommendation system using a Two-Tower model, trained on MovieLens 100K with implicit feedback and genre embeddings. Improved retrieval recall by 34% through systematic negative sampling and epoch tuning.
 
 ## Motivation
 
